@@ -1,0 +1,20 @@
+{
+    "mail": {
+        "login": {
+            "mail": "[YOUR MAIL]",
+            "password": "[YOUR PASSWORD]"
+        },
+        "settings": {
+            "imap": "[YOUR PROViDER's IMAP]",
+            "port": 993,
+            "folder": "[SERVERSIDE FOLDER FOR MAILS]"
+        }
+    },
+    "files": {
+        "path": "img/",
+        "max_foldersize": 50
+    },
+    "display": {
+        "displaytime_in_seconds": 15
+    }
+}
