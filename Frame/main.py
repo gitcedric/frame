@@ -19,7 +19,7 @@ import time
 import _thread
 
 #parse config
-config = json.load(open("Config.json"))
+config = json.load(open(abspath(dirname(__file__))+"/Config.json"))
 path_to_img = config['files']['path']
 sleeptime = config['display']['displaytime_in_seconds']
 
