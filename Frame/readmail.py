@@ -6,7 +6,7 @@ import os
 from os.path import dirname, abspath
 
 #parse config
-config = json.load(open("Config.json"))
+config = json.load(open(abspath(dirname(__file__))+"/Config.json"))
 user = config['mail']['login']
 settings = config['mail']['settings']
 fileconfig = config['files']
