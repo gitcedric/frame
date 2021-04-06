@@ -2,7 +2,7 @@
 1. Update packages  
 ```sudo apt-get update -y && sudo apt-get upgrade -y```
 2. install requirements  
-```sudo apt-get install -y python3 python3-tk```
+```sudo apt-get install -y python3 python3-tk python3-pil.imagetk```
 
 ### Configuration
 1. Apply a server-side rue in your mail-program, to move mails with a specific subject to a folder  
