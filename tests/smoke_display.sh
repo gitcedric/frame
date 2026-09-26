@@ -55,4 +55,27 @@ else
     echo '  ok   the frame idles instead of spinning when there is nothing to show'
 fi
 
+# A configured files.path may be absolute, as it is on the deployed pi.
+# Joining it onto the script directory used to produce a path that does not
+# exist, so nothing was ever cached and the screen stayed black.
+cp /frame/Frame/Config.json /tmp/Config.json.bak
+python3 - <<'PY'
+import json
+c = json.load(open('/frame/Frame/Config.json'))
+c['files']['path'] = '/frame/Frame/img/'      # absolute, with trailing slash
+json.dump(c, open('/frame/Frame/Config.json', 'w'), indent=4)
+PY
+python3 - <<'PY'
+from PIL import Image
+Image.new('RGB', (800, 600), (20, 90, 40)).save('/frame/Frame/img/abs.jpg')
+PY
+absout=$(cd / && timeout 8 xvfb-run -a python3 -u /frame/Frame/main.py 2>&1 || true)
+cp /tmp/Config.json.bak /frame/Frame/Config.json
+if echo "$absout" | grep -q '0 files cached!'; then
+    echo '  FAIL an absolute files.path cached nothing'
+    fail=1
+else
+    echo "  ok   an absolute files.path works ($(echo "$absout" | grep -m1 'files cached!'))"
+fi
+
 exit $fail

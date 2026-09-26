@@ -4,6 +4,7 @@ import json
 import base64
 import os
 import re
+import time
 from io import BytesIO
 from os.path import dirname, abspath
 
@@ -24,7 +25,9 @@ fileconfig = config['files']
 
 #img filepath
 path_to_dir = abspath(dirname(__file__))
-filepath = path_to_dir+'/'+fileconfig['path']
+#files.path may be relative to this script or absolute, join returns the
+#configured value unchanged when it is already absolute
+filepath = os.path.join(path_to_dir, fileconfig['path'])
 max_foldersize = fileconfig['max_foldersize']
 mail_folder = settings['folder']
 
@@ -42,6 +45,41 @@ MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 #a 100 kB file can claim to be 60000x60000 pixels, decoding it would eat the Pi
 MAX_PIXELS = 80 * 1000 * 1000
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+
+#DateTimeOriginal and DateTimeDigitized live in the exif sub ifd, DateTime
+#sits at the top level
+EXIF_SUB_IFD = 0x8769
+EXIF_DATETIME = 306
+EXIF_TAKEN = (36867, 36868)
+
+#When the picture was taken, as the exif string and a timestamp. The frame
+#orders by this, so a backlog of mail does not show up as one undated lump.
+def capture_date(image):
+    try:
+        exif = image.getexif()
+    except Exception:
+        return None, None
+
+    value = None
+    try:
+        sub = exif.get_ifd(EXIF_SUB_IFD)
+    except Exception:
+        sub = {}
+    for tag in EXIF_TAKEN:
+        if sub.get(tag):
+            value = sub[tag]
+            break
+    if not value:
+        value = exif.get(EXIF_DATETIME)
+    if not value:
+        return None, None
+
+    value = str(value)
+    try:
+        stamp = time.mktime(time.strptime(value, '%Y:%m:%d %H:%M:%S'))
+    except (ValueError, OverflowError):
+        return value, None
+    return value, stamp
 
 #the frame only ever stores jpg
 def target_name(fileName):
@@ -81,24 +119,40 @@ def convert_attachment(payload, dest):
 
     #verify() consumes the handle, so open again for the actual decode
     with Image.open(BytesIO(payload)) as image:
+        taken, stamp = capture_date(image)
         #honour the exif rotation now, saving as jpg drops exif (and with it
         #the GPS coordinates the phone attached)
         image = ImageOps.exif_transpose(image)
         rgb = image.convert('RGB')
-        #Write beside the target and move it into place in one step, so the
-        #frame never sees a half written or 0 byte file. The leading dot
-        #keeps main.py from caching it even if one is ever left behind.
-        tmp = os.path.join(os.path.dirname(dest), '.' + os.path.basename(dest) + '.partial')
-        #O_EXCL: never follow a symlink or overwrite something already there
-        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        try:
-            with os.fdopen(handle, 'wb') as fp:
+
+    #Keep the capture date and nothing else. The gps tag the phone attached
+    #is not carried over.
+    keep = Image.Exif()
+    if taken:
+        keep[EXIF_DATETIME] = taken
+    keep = keep.tobytes() if taken else None
+    #Write beside the target and move it into place in one step, so the
+    #frame never sees a half written or 0 byte file. The leading dot
+    #keeps main.py from caching it even if one is ever left behind.
+    tmp = os.path.join(os.path.dirname(dest), '.' + os.path.basename(dest) + '.partial')
+    #O_EXCL: never follow a symlink or overwrite something already there
+    handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    try:
+        with os.fdopen(handle, 'wb') as fp:
+            if keep:
+                rgb.save(fp, 'JPEG', quality=90, exif=keep)
+            else:
                 rgb.save(fp, 'JPEG', quality=90)
-            os.rename(tmp, dest)
-        except Exception:
-            if os.path.lexists(tmp):
-                os.unlink(tmp)
-            raise
+        os.rename(tmp, dest)
+        #The frame sorts by mtime, so put the capture date there too.
+        #That keeps sorting a cheap stat instead of opening every
+        #picture on every cache pass.
+        if stamp:
+            os.utime(dest, (stamp, stamp))
+    except Exception:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        raise
 
 
 #everything below only runs when this file is executed, not when it is
@@ -153,7 +207,7 @@ def main():
             
                 #if more than X files, delete oldest one
                 list_of_files=os.listdir(filepath)
-                full_path = [filepath+"{0}".format(x) for x in list_of_files]
+                full_path = [os.path.join(filepath, x) for x in list_of_files]
             
                 if len(list_of_files) > max_foldersize:
                     os.remove(min(full_path, key=os.path.getctime))

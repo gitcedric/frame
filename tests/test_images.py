@@ -132,6 +132,38 @@ try:
     print('\nimport safety')
     check('importing readmail opens no imap connection', hasattr(readmail, 'main'))
 
+    print('\nthe capture date decides the running order')
+
+    def mail_photo(name, taken):
+        #a picture as it arrives from a phone: capture date plus the camera
+        #identification tags that sit alongside the location data
+        buf = BytesIO()
+        picture = Image.new('RGB', (160, 120), (60, 60, 60))
+        tags = picture.getexif()
+        tags[306] = taken
+        tags[271] = 'Apple'                 # Make
+        tags[272] = 'iPhone 13'             # Model
+        tags[305] = 'secret-build-1234'     # Software
+        picture.save(buf, 'JPEG', exif=tags)
+        return deliver(name, buf.getvalue())
+
+    #delivered newest first, as a backlog of mail would arrive
+    newer = mail_photo('second.jpg', '2024:01:01 12:00:00')
+    older = mail_photo('first.jpg', '2019:07:14 09:30:00')
+    check('the capture date survives conversion',
+          str(Image.open(older).getexif().get(306)) == '2019:07:14 09:30:00')
+    #the converted file gets a freshly built exif holding the date alone, so
+    #anything else the phone attached, location included, cannot survive
+    carried = dict(Image.open(older).getexif())
+    check('the camera tags are dropped', not any(t in carried for t in (271, 272, 305)))
+    check('nothing but the date is carried over', set(carried) <= {306})
+    check('the older picture sorts first despite arriving last',
+          os.path.getmtime(older) < os.path.getmtime(newer))
+
+    #a picture with no exif date must still work, falling back to now
+    plain = deliver('nodate.jpg', jpg)
+    check('a picture without an exif date still converts', plain is not None)
+
     print('\nrotate.py normalises pictures copied in by hand')
     import rotate
     for name in os.listdir(inbox):
@@ -162,6 +194,14 @@ try:
     rotate.main()
     unchanged = all(open(os.path.join(inbox, n), 'rb').read() == b for n, b in snapshot.items())
     check('running it twice changes nothing', unchanged)
+
+    dated = os.path.join(inbox, 'dated.png')
+    Image.new('RGB', (100, 60), (5, 5, 5)).save(dated)
+    os.utime(dated, (1_000_000_000, 1_000_000_000))
+    rotate.main()
+    converted = os.path.join(inbox, 'dated.jpg')
+    check('rotate keeps the running order when it converts a file',
+          os.path.isfile(converted) and abs(os.path.getmtime(converted) - 1_000_000_000) < 2)
 
 finally:
     shutil.rmtree(inbox, ignore_errors=True)

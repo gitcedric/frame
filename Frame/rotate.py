@@ -40,15 +40,29 @@ def normalise(path):
             return 'skipped, {fmt} is not displayable'.format(fmt=image.format)
         if not needs_work(image, path):
             return None
+        taken, stamp = readmail.capture_date(image)
         upright = ImageOps.exif_transpose(image).convert('RGB')
 
     target = splitext(path)[0] + '.jpg'
     if target != path and os.path.lexists(target):
         return 'skipped, {name} already exists'.format(name=os.path.basename(target))
 
-    upright.save(target, 'JPEG', quality=90)
+    #carry the capture date over, otherwise re-saving would move the picture
+    #to the end of the frame's running order
+    keep = Image.Exif()
+    if taken:
+        keep[readmail.EXIF_DATETIME] = taken
+        upright.save(target, 'JPEG', quality=90, exif=keep.tobytes())
+    else:
+        #no exif date, so preserve whatever mtime the file already had
+        stamp = os.path.getmtime(path)
+        upright.save(target, 'JPEG', quality=90)
+
     if target != path:
         os.remove(path)
+    if stamp:
+        os.utime(target, (stamp, stamp))
+    if target != path:
         return 'converted to {name}'.format(name=os.path.basename(target))
     return 'rotated upright'
 

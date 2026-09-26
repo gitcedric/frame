@@ -32,14 +32,18 @@ sleeptime = config['display']['displaytime_in_seconds']
 
 #variables
 path_to_dir = abspath(dirname(__file__))
-dir_to_img = '/'+path_to_img
+#files.path may be relative to this script or absolute, join returns the
+#configured value unchanged when it is already absolute
+img_dir = join(path_to_dir, path_to_img)
 files = []
 
-#Caching all files found in subdir 'img/'
+#Caching all files found in subdir 'img/', oldest first. readmail.py puts
+#the capture date on the file, so this orders by when the picture was
+#taken rather than when the mail happened to arrive.
 def cache_files():
     global files
     files = []
-    for (dirpath, dirnames, filenames) in walk(path_to_dir+dir_to_img):
+    for (dirpath, dirnames, filenames) in walk(img_dir):
         displayable = [name for name in filenames
                     if name.lower().endswith(DISPLAYABLE) and not name.startswith('.')]
         for fname in sorted(displayable, key=lambda name:
@@ -75,7 +79,7 @@ class Window(Frame):
         while (True):
             shown = 0
             for fname in files:
-                if isfile(abspath(path_to_dir)+dir_to_img+fname):
+                if isfile(join(img_dir, fname)):
                     #a file that is corrupt, half written or simply not an
                     #image must not kill the thread, skip it and carry on
                     try:
@@ -98,7 +102,7 @@ class Window(Frame):
     def openImage(self, filename):
         #absolute, so the frame also works when it is started from
         #somewhere else than Frame/ (systemd, cron, autostart)
-        image = Image.open(abspath(path_to_dir)+dir_to_img+filename)
+        image = Image.open(join(img_dir, filename))
         screensize = root.winfo_screenwidth(), root.winfo_screenheight()
 
         #fit longer axis to screen, shorter axis = image * (screen/image)
