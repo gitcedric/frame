@@ -101,6 +101,10 @@ try:
           deliver('big.jpg', jpg + b'\x00' * (readmail.MAX_ATTACHMENT_BYTES + 1)) is None)
     check('no half written file is left behind',
           not os.path.exists(os.path.join(inbox, 'bomb.jpg')))
+    check('no .partial scratch file is left behind',
+          not [n for n in os.listdir(inbox) if n.endswith('.partial')])
+    check('a 0 byte attachment never creates a file',
+          deliver('zero.jpg', b'') is None and not os.path.exists(os.path.join(inbox, 'zero.jpg')))
 
     print('\nthe filename in the mail cannot point outside img/')
     for label, name in [
@@ -127,6 +131,37 @@ try:
 
     print('\nimport safety')
     check('importing readmail opens no imap connection', hasattr(readmail, 'main'))
+
+    print('\nrotate.py normalises pictures copied in by hand')
+    import rotate
+    for name in os.listdir(inbox):
+        os.remove(os.path.join(inbox, name))
+
+    #a rotated jpg, the phone marks the orientation instead of turning pixels
+    sideways = Image.new('RGB', (200, 100), (10, 10, 10))
+    tags = sideways.getexif()
+    tags[274] = 6
+    sideways.save(os.path.join(inbox, 'sideways.jpg'), 'JPEG', exif=tags)
+    #a png, which the frame can show but readmail would have converted
+    Image.new('RGB', (120, 80), (9, 9, 9)).save(os.path.join(inbox, 'hand-copied.png'))
+    #an upright jpg, which must not be touched at all
+    upright = os.path.join(inbox, 'fine.jpg')
+    Image.new('RGB', (150, 90), (7, 7, 7)).save(upright, 'JPEG', quality=90)
+    before = open(upright, 'rb').read()
+
+    rotate.main()
+
+    rotated = Image.open(os.path.join(inbox, 'sideways.jpg'))
+    check('a sideways jpg is turned upright', rotated.size == (100, 200))
+    check('a hand copied png becomes a jpg', os.path.isfile(os.path.join(inbox, 'hand-copied.jpg')))
+    check('the png original is gone', not os.path.isfile(os.path.join(inbox, 'hand-copied.png')))
+    check('an upright jpg is not re-encoded', open(upright, 'rb').read() == before)
+
+    #running it again must be a no-op, not another round of recompression
+    snapshot = {n: open(os.path.join(inbox, n), 'rb').read() for n in os.listdir(inbox)}
+    rotate.main()
+    unchanged = all(open(os.path.join(inbox, n), 'rb').read() == b for n, b in snapshot.items())
+    check('running it twice changes nothing', unchanged)
 
 finally:
     shutil.rmtree(inbox, ignore_errors=True)

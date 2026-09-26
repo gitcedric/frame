@@ -85,13 +85,19 @@ def convert_attachment(payload, dest):
         #the GPS coordinates the phone attached)
         image = ImageOps.exif_transpose(image)
         rgb = image.convert('RGB')
+        #Write beside the target and move it into place in one step, so the
+        #frame never sees a half written or 0 byte file. The leading dot
+        #keeps main.py from caching it even if one is ever left behind.
+        tmp = os.path.join(os.path.dirname(dest), '.' + os.path.basename(dest) + '.partial')
         #O_EXCL: never follow a symlink or overwrite something already there
-        handle = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         try:
             with os.fdopen(handle, 'wb') as fp:
                 rgb.save(fp, 'JPEG', quality=90)
+            os.rename(tmp, dest)
         except Exception:
-            os.unlink(dest)
+            if os.path.lexists(tmp):
+                os.unlink(tmp)
             raise
 
 
