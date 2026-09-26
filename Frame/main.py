@@ -9,6 +9,13 @@
 from tkinter import *
 from PIL import ImageTk, Image 
 
+#Image.ANTIALIAS was removed in Pillow 10, LANCZOS is the same filter
+RESAMPLE = getattr(Image, 'Resampling', Image).LANCZOS
+
+#The frame displays, it does not convert. readmail.py turns every incoming
+#picture into a jpg, anything else in img/ is ignored.
+DISPLAYABLE = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tif', '.tiff')
+
 #files
 import json
 from os import walk
@@ -33,7 +40,9 @@ def cache_files():
     global files
     files = []
     for (dirpath, dirnames, filenames) in walk(path_to_dir+dir_to_img):
-        for fname in sorted(filenames, key=lambda name:
+        displayable = [name for name in filenames
+                    if name.lower().endswith(DISPLAYABLE) and not name.startswith('.')]
+        for fname in sorted(displayable, key=lambda name:
                     getmtime(join(dirpath, name))):
             files.append(fname)
     print(str(len(files))+' files cached!')
@@ -66,7 +75,13 @@ class Window(Frame):
         while (True):
             for fname in files:
                 if isfile(abspath(path_to_dir)+dir_to_img+fname):
-                    self.changeImage(fname)
+                    #a file that is corrupt, half written or simply not an
+                    #image must not kill the thread, skip it and carry on
+                    try:
+                        self.changeImage(fname)
+                    except Exception as error:
+                        print('Skipping "{fname}": {error}'.format(fname=fname, error=error))
+                        continue
                     time.sleep(sleeptime)
             #cache new files
             cache_files()
@@ -74,7 +89,9 @@ class Window(Frame):
 
     #open Image, convert it to fit either landscape or portrait and return as PhotoImage
     def openImage(self, filename):
-        image = Image.open(path_to_img+filename)
+        #absolute, so the frame also works when it is started from
+        #somewhere else than Frame/ (systemd, cron, autostart)
+        image = Image.open(abspath(path_to_dir)+dir_to_img+filename)
         screensize = root.winfo_screenwidth(), root.winfo_screenheight()
 
         #fit longer axis to screen, shorter axis = image * (screen/image)
@@ -84,7 +101,7 @@ class Window(Frame):
         else:
             newSize = int(image.size[0]*(screensize[1]/image.size[1])), screensize[1]
 
-        return ImageTk.PhotoImage(image.resize(newSize, Image.ANTIALIAS))
+        return ImageTk.PhotoImage(image.resize(newSize, RESAMPLE))
 
 
 root = Tk()
