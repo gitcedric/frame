@@ -16,6 +16,7 @@ open(d + 'ADD_IMAGE_HERE', 'w').write('')          # the placeholder in the repo
 open(d + 'notes.txt', 'w').write('x')              # not a picture
 open(d + '.hidden.jpg', 'w').write('x')            # dotfile junk
 open(d + 'corrupt.jpg', 'wb').write(b'\xff\xd8\xff\xe0broken')
+open(d + 'empty.jpg', 'wb').write(b'')             # the 0 byte file seen on the pi
 PY
 
 # -u because timeout kills the app and buffered output would be lost;
@@ -24,8 +25,10 @@ out=$(cd / && timeout 12 xvfb-run -a python3 -u /frame/Frame/main.py 2>&1 || tru
 echo "$out" | sed 's/^/  /'
 
 fail=0
-echo "$out" | grep -q '3 files cached!' \
-    || { echo '  FAIL only jpg/PNG/corrupt.jpg should be cached'; fail=1; }
+echo "$out" | grep -q '4 files cached!' \
+    || { echo '  FAIL only the jpg/PNG/corrupt/empty files should be cached'; fail=1; }
+echo "$out" | grep -q 'Skipping "empty.jpg"' \
+    || { echo '  FAIL the 0 byte file was not skipped'; fail=1; }
 echo "$out" | grep -q 'Skipping "corrupt.jpg"' \
     || { echo '  FAIL the corrupt file was not skipped'; fail=1; }
 # the frame is started from / here on purpose, a picture must still be found
@@ -37,4 +40,19 @@ echo "$out" | grep -qi 'traceback' \
     && { echo '  FAIL the slideshow thread crashed'; fail=1; }
 
 [ "$fail" -eq 0 ] && echo '  ok   the frame ignored the junk and survived the corrupt file'
+
+# An empty img/ used to spin the slideshow thread at full speed. With
+# displaytime at 1s a few seconds may only produce a handful of passes,
+# a spinning loop produces thousands.
+rm -f "$IMG"/* "$IMG"/.[!.]* 2>/dev/null || true
+idle=$(cd / && timeout 8 xvfb-run -a python3 -u /frame/Frame/main.py 2>&1 || true)
+passes=$(echo "$idle" | grep -c '0 files cached!')
+echo "  empty folder produced $passes cache passes in 8s"
+if [ "$passes" -gt 40 ]; then
+    echo '  FAIL the loop is spinning on an empty folder'
+    fail=1
+else
+    echo '  ok   the frame idles instead of spinning when there is nothing to show'
+fi
+
 exit $fail

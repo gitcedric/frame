@@ -73,6 +73,7 @@ class Window(Frame):
     #iterate over files to call next image
     def nextfile(self):
         while (True):
+            shown = 0
             for fname in files:
                 if isfile(abspath(path_to_dir)+dir_to_img+fname):
                     #a file that is corrupt, half written or simply not an
@@ -82,7 +83,13 @@ class Window(Frame):
                     except Exception as error:
                         print('Skipping "{fname}": {error}'.format(fname=fname, error=error))
                         continue
+                    shown += 1
                     time.sleep(sleeptime)
+            #An empty folder, or one where nothing could be decoded, would
+            #spin this loop at full speed and heat up the pi for nothing.
+            #Wait instead, readmail.py may deliver something later on.
+            if shown == 0:
+                time.sleep(sleeptime)
             #cache new files
             cache_files()
         #runs in infinite loop!
