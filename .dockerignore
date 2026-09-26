@@ -1,0 +1,4 @@
+# never bake real mail credentials or personal pictures into an image
+Frame/Config.json
+Frame/img/*
+.git

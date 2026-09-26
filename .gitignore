@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+
+# pictures pulled from mail and the test output, not part of the repo
+Frame/img/*
+!Frame/img/ADD_IMAGE_HERE
