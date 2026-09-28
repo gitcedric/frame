@@ -27,12 +27,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip3 install --break-system-packages --no-cache-dir pillow-heif
 
 WORKDIR /frame
-COPY Frame/ Frame/
+COPY main.py readmail.py rotate.py ./
+COPY img/ img/
 COPY tests/ tests/
 
-# Frame/Config.json is kept out of the image by .dockerignore, mail
-# credentials have no business in a container image. Tests use a dummy.
-COPY tests/Config.test.json Frame/Config.json
+# Config.json is untracked and kept out of the image, mail credentials
+# have no business in a container image. Tests use a dummy.
+COPY tests/Config.test.json Config.json
 
 EXPOSE 8080
 CMD ["sh", "tests/run.sh"]

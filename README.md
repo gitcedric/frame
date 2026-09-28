@@ -39,8 +39,31 @@ fits the screen the frame will really run on.
 ### Configuration
 1. Apply a server-side rue in your mail-program, to move mails with a specific subject to a folder  
 eg. Where \[subject] = 'Picture' | move to folder 'Pictures'
-2. Edit Config.json  
-set mail.settings.folder to the same name, you gave on 1.
+2. Create your own config from the example, it is not tracked by git so your
+   mail password stays out of the repository  
+```cp Config.example.json Config.json```
+3. Edit Config.json  
+set mail.settings.folder to the same name, you gave on 1.  
+`files.path` may be relative to this directory (`img/`) or an absolute path.
+
+### Running it on the pi
+Clone to `~/Frame`, so the scripts end up at `~/Frame/main.py`.
+
+Fetch mail hourly, via `crontab -e`:
+```
+0 * * * * /usr/bin/python3 /home/pi/Frame/readmail.py >> /home/pi/readmail.log 2>&1
+```
+
+Start the frame with the desktop session, `~/.config/autostart/frame.desktop`:
+```
+[Desktop Entry]
+Type=Application
+Name=Frame
+Exec=/usr/bin/python3 /home/pi/Frame/main.py
+X-GNOME-Autostart-enabled=true
+```
+This needs the pi to log in automatically (`raspi-config` → System Options →
+Boot / Auto Login → Desktop Autologin).
 
 
 tbd...

@@ -11,7 +11,7 @@ import sys
 import tempfile
 from io import BytesIO
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Frame'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from PIL import Image
 import readmail

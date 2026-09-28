@@ -101,7 +101,7 @@ class Window(Frame):
     #open Image, convert it to fit either landscape or portrait and return as PhotoImage
     def openImage(self, filename):
         #absolute, so the frame also works when it is started from
-        #somewhere else than Frame/ (systemd, cron, autostart)
+        #somewhere else than the repo (systemd, cron, autostart)
         image = Image.open(join(img_dir, filename))
         screensize = root.winfo_screenwidth(), root.winfo_screenheight()
 

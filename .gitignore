@@ -2,5 +2,8 @@ __pycache__/
 *.py[cod]
 
 # pictures pulled from mail and the test output, not part of the repo
-Frame/img/*
-!Frame/img/ADD_IMAGE_HERE
+img/*
+!img/ADD_IMAGE_HERE
+
+# real mail credentials, copied from Config.example.json
+Config.json

@@ -9,7 +9,7 @@
 #   podman run --rm -p 8080:8080 -v ~/Pictures:/pictures:ro frame-test sh tests/gui.sh
 set -e
 
-IMG=/frame/Frame/img
+IMG=/frame/img
 mkdir -p "$IMG"
 
 if [ -d /pictures ]; then
@@ -18,7 +18,7 @@ if [ -d /pictures ]; then
     rm -f "$IMG"/* 2>/dev/null || true
     python3 - <<'PY'
 import os, sys
-sys.path.insert(0, '/frame/Frame')
+sys.path.insert(0, '/frame')
 import readmail
 
 src, taken = '/pictures', 0
@@ -42,7 +42,7 @@ PY
 elif [ -z "$(ls -A "$IMG" 2>/dev/null)" ]; then
     python3 - <<'PY'
 from PIL import Image, ImageDraw
-d = '/frame/Frame/img/'
+d = '/frame/img/'
 for name, size, colour, label in [
     ('01-landscape.jpg', (1600, 1000), (38, 70, 110), 'LANDSCAPE 1600x1000'),
     ('02-portrait.jpg',  (1000, 1600), (110, 48, 38), 'PORTRAIT 1000x1600'),
@@ -68,7 +68,7 @@ sleep 2
 # it the window would stay 1x1 and the screen would be black.
 matchbox-window-manager -use_titlebar no >/dev/null 2>&1 &
 sleep 1
-python3 -u /frame/Frame/main.py &
+python3 -u /frame/main.py &
 sleep 2
 
 # -nopw is fine, nothing is reachable beyond the port you publish yourself
