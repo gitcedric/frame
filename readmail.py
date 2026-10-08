@@ -129,6 +129,26 @@ def heif_to_jpeg(payload):
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
+#What main.py is willing to display. Kept in step with the DISPLAYABLE
+#tuple there; main.py cannot be imported from here because it opens a Tk
+#window at import time.
+DISPLAYABLE = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tif', '.tiff')
+
+#Keep img/ at max_foldersize and return whatever was dropped, or None.
+#Only pictures are counted and only pictures are deleted: a stray file (a
+#placeholder restored by git, a leftover .partial) must neither inflate the
+#count nor be picked as the victim. The oldest is chosen by mtime, which
+#carries the capture date, so the oldest *photo* goes rather than whichever
+#file happened to be written to disk first.
+def prune_folder():
+    pictures = [os.path.join(filepath, name) for name in os.listdir(filepath)
+                if name.lower().endswith(DISPLAYABLE) and not name.startswith('.')]
+    if len(pictures) <= max_foldersize:
+        return None
+    oldest = min(pictures, key=os.path.getmtime)
+    os.remove(oldest)
+    return oldest
+
 #the frame only ever stores jpg
 def target_name(fileName):
     return os.path.splitext(fileName)[0] + '.jpg'
@@ -260,13 +280,11 @@ def main():
                 subject = str(email_message).split("Subject: ", 1)[1].split("\nTo:", 1)[0]
                 print('Downloaded "{fileName}" from email to"{path}".'.format(fileName=os.path.basename(dest), path=filepath))
             
-                #if more than X files, delete oldest one
-                list_of_files=os.listdir(filepath)
-                full_path = [os.path.join(filepath, x) for x in list_of_files]
-            
-                if len(list_of_files) > max_foldersize:
-                    os.remove(min(full_path, key=os.path.getctime))
-                    print('Exceeded max_foldersize of ' + str(max_foldersize) + ', deleting oldest file.')
+                #if more than X pictures, drop the oldest one
+                dropped = prune_folder()
+                if dropped:
+                    print('Exceeded max_foldersize of {m}, deleted "{f}".'.format(
+                        m=max_foldersize, f=os.path.basename(dropped)))
         
     
         imap.store(num, '+FLAGS', '\Deleted')

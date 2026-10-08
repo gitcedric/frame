@@ -129,6 +129,44 @@ try:
     check('the symlink target was not created',
           not os.path.exists('/tmp/frame-test-should-not-exist'))
 
+    print('\nthe prune keeps img/ at max_foldersize')
+    for name in os.listdir(inbox):
+        os.remove(os.path.join(inbox, name))
+    readmail.max_foldersize = 3
+
+    def picture(name, when):
+        Image.new('RGB', (40, 30), (1, 2, 3)).save(os.path.join(inbox, name), 'JPEG')
+        os.utime(os.path.join(inbox, name), (when, when))
+
+    picture('oldest.jpg', 1_000_000_000)
+    picture('middle.jpg', 1_500_000_000)
+    picture('newest.jpg', 2_000_000_000)
+    check('at the limit nothing is dropped', readmail.prune_folder() is None)
+
+    picture('fourth.jpg', 1_900_000_000)
+    dropped = readmail.prune_folder()
+    check('over the limit the oldest by mtime goes',
+          dropped is not None and os.path.basename(dropped) == 'oldest.jpg')
+    check('it is actually gone', not os.path.exists(os.path.join(inbox, 'oldest.jpg')))
+
+    #the placeholder git keeps restoring, and a leftover scratch file
+    open(os.path.join(inbox, 'ADD_IMAGE_HERE'), 'w').write('')
+    open(os.path.join(inbox, '.stray.jpg.partial'), 'w').write('x')
+    check('a stray file does not inflate the count', readmail.prune_folder() is None)
+    check('the placeholder survives', os.path.exists(os.path.join(inbox, 'ADD_IMAGE_HERE')))
+    check('the .partial survives', os.path.exists(os.path.join(inbox, '.stray.jpg.partial')))
+
+    #and a stray file is never chosen as the victim
+    picture('fifth.jpg', 2_100_000_000)
+    dropped = readmail.prune_folder()
+    check('only a picture is ever deleted',
+          dropped is not None and dropped.lower().endswith('.jpg')
+          and not os.path.basename(dropped).startswith('.'))
+    check('the placeholder still survives', os.path.exists(os.path.join(inbox, 'ADD_IMAGE_HERE')))
+
+    for name in os.listdir(inbox):
+        os.remove(os.path.join(inbox, name))
+
     print('\nimport safety')
     check('importing readmail opens no imap connection', hasattr(readmail, 'main'))
 
