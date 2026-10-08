@@ -4,18 +4,24 @@ import json
 import base64
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 from io import BytesIO
 from os.path import dirname, abspath
 
 from PIL import Image, ImageOps
 
-#HEIF/HEIC support (iPhone photos), optional
+#HEIF/HEIC support (iPhone photos). pillow-heif is the fast path, but it
+#ships no wheel for 32 bit arm, so on a pi running armhf we fall back to
+#libheif's own command line tool instead (apt install libheif-examples).
 try:
     from pillow_heif import register_heif_opener
     register_heif_opener()
+    HAVE_PILLOW_HEIF = True
 except ImportError:
-    print('pillow-heif not installed, HEIC attachments will be skipped.')
+    HAVE_PILLOW_HEIF = False
 
 #parse config
 config = json.load(open(abspath(dirname(__file__))+"/Config.json"))
@@ -81,6 +87,48 @@ def capture_date(image):
         return value, None
     return value, stamp
 
+#ISO base media file format: a 4 byte box length, 'ftyp', then the brand.
+#Sniffing the brand means we never hand a non-heif file to the decoder.
+HEIF_BRANDS = (b'heic', b'heix', b'heim', b'heis', b'hevc', b'hevm',
+               b'hevs', b'mif1', b'msf1', b'avif', b'avis')
+HEIF_CONVERT = shutil.which('heif-convert')
+#a hostile file should not be able to hang the mail run forever
+HEIF_CONVERT_TIMEOUT = 120
+
+def looks_like_heif(payload):
+    return len(payload) > 12 and payload[4:8] == b'ftyp' and payload[8:12] in HEIF_BRANDS
+
+#Decode heic with libheif's cli and hand back jpeg bytes, so the rest of the
+#pipeline (allowlist, pixel limit, exif date, atomic write) still applies.
+#Only used when pillow-heif is unavailable.
+def heif_to_jpeg(payload):
+    if not HEIF_CONVERT:
+        raise ValueError('heic needs pillow-heif or libheif-examples, neither is installed')
+
+    workdir = tempfile.mkdtemp(prefix='frame-heif-')
+    try:
+        source = os.path.join(workdir, 'in.heic')
+        target = os.path.join(workdir, 'out.jpg')
+        with open(source, 'wb') as fp:
+            fp.write(payload)
+
+        #argument list, never a shell, so nothing from the mail is interpreted
+        subprocess.run([HEIF_CONVERT, '-q', '90', source, target],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=HEIF_CONVERT_TIMEOUT, check=True)
+
+        #a heic holding several images makes out-1.jpg, out-2.jpg instead
+        if not os.path.isfile(target):
+            produced = sorted(f for f in os.listdir(workdir) if f.startswith('out'))
+            if not produced:
+                raise ValueError('heif-convert produced nothing')
+            target = os.path.join(workdir, produced[0])
+
+        with open(target, 'rb') as fp:
+            return fp.read()
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
 #the frame only ever stores jpg
 def target_name(fileName):
     return os.path.splitext(fileName)[0] + '.jpg'
@@ -105,6 +153,13 @@ def convert_attachment(payload, dest):
         raise ValueError('empty attachment')
     if len(payload) > MAX_ATTACHMENT_BYTES:
         raise ValueError('attachment larger than {limit} bytes'.format(limit=MAX_ATTACHMENT_BYTES))
+
+    #Without pillow-heif, pillow cannot open a heic at all. Decode it to jpeg
+    #first and let everything below treat it as an ordinary picture. The size
+    #limit above is already enforced, so this cannot be used to feed something
+    #huge to libheif.
+    if not HAVE_PILLOW_HEIF and looks_like_heif(payload):
+        payload = heif_to_jpeg(payload)
 
     #probe first: format and dimensions are checked before any pixel is decoded
     with Image.open(BytesIO(payload)) as probe:

@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pil.imagetk \
         python3-pip \
         libheif1 \
+        libheif-examples \
         xvfb \
         xauth \
         matchbox-window-manager \

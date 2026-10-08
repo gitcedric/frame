@@ -4,8 +4,12 @@
 2. install requirements  
 ```sudo apt-get install -y python3 python3-tk python3-pil.imagetk```
 3. install HEIF/HEIC support, for photos sent from an iPhone  
-```sudo apt-get install -y libheif1 && pip3 install pillow-heif```  
-Optional. Without it everything else still works, HEIC attachments are skipped with a note in the log.
+On 64 bit (aarch64) pip has a wheel:  
+```sudo apt-get install -y libheif1 && pip3 install pillow-heif --break-system-packages```  
+On 32 bit (armv7l) there is no wheel, so use libheif's command line tool instead:  
+```sudo apt-get install -y libheif-examples```  
+`readmail.py` prefers pillow-heif and falls back to `heif-convert`. With neither,
+everything else still works and HEIC attachments are skipped with a note in the log.
 
 ### Pictures
 `readmail.py` converts every incoming attachment it recognises as a picture to jpg and stores
